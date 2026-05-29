@@ -6,15 +6,22 @@ Gemacht für meine Tochter, die in einer Woche ihre Prüfung schreibt – aber f
 
 ## Was kann die App?
 
-- **Übungsaufgaben nach Themen** sortiert (Bruch- & Prozentrechnung, Terme & Gleichungen, Funktionen, Geometrie & Pythagoras, Trigonometrie, Wahrscheinlichkeit & Statistik)
+- **Über 130 Übungsaufgaben** nach Themen sortiert: Bruch-/Prozent-/Zinsrechnung, Terme & Gleichungen, Funktionen, Geometrie & Pythagoras, Trigonometrie, Wahrscheinlichkeit & Statistik, Sach- & Textaufgaben
 - **Sofortige Lösungskontrolle** – richtig/falsch direkt sichtbar
-- **Tipps auf Knopfdruck**, wenn man nicht weiterkommt
-- **Schritt-für-Schritt-Erklärungen** ("für Dummies") nach jeder Aufgabe
+- **Drei Hilfe-Stufen pro Aufgabe:**
+  1. 💡 **Tipp** (kleiner Anstoß)
+  2. **Schritt-für-Schritt-Lösung** (was rechne ich in welcher Reihenfolge)
+  3. 🤔 **Noch genauere Erklärung "für Dummies"**, wenn man's immer noch nicht versteht
+- **📝 Probeklausuren**, die sich **jedes Mal neu** aus der Aufgaben-Datenbank zusammensetzen – mit echtem Aufbau (**Teil A ohne Hilfsmittel** + **Teil B mit Taschenrechner**), Punktebewertung und ungefährer Note
 - **Formeln & Merksätze** zu jedem Thema
-- **Prüfungsmodus**: 20 zufällig gemischte Aufgaben aus allen Themen
-- **7-Tage-Lernplan** für die letzte Woche vor der Prüfung
+- **🎯 Schnelltest**: 20 zufällig gemischte Aufgaben
+- **🗓️ 7-Tage-Lernplan** für die letzte Woche vor der Prüfung
 - **Fortschritt wird gespeichert** (im Browser, ganz lokal)
 - Läuft **komplett offline**, auch auf dem Handy 📱
+
+> 📚 Tipp: Die **echten Original-Prüfungen der letzten Jahre** für Brandenburg gibt es
+> kostenlos auf dem [Bildungsserver Berlin-Brandenburg](https://bildungsserver.berlin-brandenburg.de/unterricht/pruefungen/pruefungen-10/pruefungsaufgaben-mathematik)
+> als PDF – ideal als Ergänzung zum Üben mit dieser App.
 
 ## Wie starte ich sie?
 
@@ -48,8 +55,11 @@ Aufgaben stehen in `data.js`. Eine Aufgabe sieht so aus:
   q: "Berechne 7 · 8.",    // die Frage (HTML erlaubt)
   answer: 56,              // richtige Antwort
   // options: [...],       // nur bei "mc"
-  tip: "Kleines 1x1.",     // Tipp
-  steps: ["7 · 8 = 56."],  // Lösungsweg Schritt für Schritt
+  part: "A",               // "A" (ohne Hilfsmittel) oder "B" (mit Taschenrechner)
+  points: 1,               // Punktwert für die Probeklausur
+  tip: "Kleines 1x1.",     // Stufe 1: Tipp
+  steps: ["7 · 8 = 56."],  // Stufe 2: Lösungsweg Schritt für Schritt
+  deep: "Mal-Rechnen ...", // Stufe 3: ausführlichere Erklärung
 }
 ```
 

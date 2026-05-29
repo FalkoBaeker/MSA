@@ -73,18 +73,29 @@ function renderHome() {
 
   app.appendChild(el("h1", null, "Hey! Bereit für die MSA Mathe? 🚀"));
   app.appendChild(el("p", "sub",
-    "Wähle ein Thema und übe Aufgaben mit sofortiger Lösungskontrolle. " +
-    "Du kannst dir bei jeder Aufgabe einen <b>Tipp</b> holen oder die " +
-    "<b>Schritt-für-Schritt-Erklärung</b> anzeigen lassen. Dein Fortschritt wird gespeichert."));
+    "Übe Aufgaben mit sofortiger Lösungskontrolle. Bei jeder Aufgabe kannst du dir " +
+    "einen <b>Tipp</b> holen, die <b>Schritt-für-Schritt-Lösung</b> ansehen und – wenn du " +
+    "es immer noch nicht verstehst – eine <b>noch genauere Erklärung</b>. Insgesamt warten " +
+    `<b>${totalQuestions()} Aufgaben</b> auf dich. Dein Fortschritt wird gespeichert.`));
 
-  /* Aktions-Karten */
+  /* Probeklausur – Hauptfeature */
+  const exam = el("button", "card action-card");
+  exam.style.gridColumn = "1 / -1";
+  exam.innerHTML =
+    `<span class="emoji">📝</span>
+     <div><div class="card-title">Probeklausur starten</div>
+     <div class="card-meta" style="color:#eaeaff">Echte Prüfung mit Teil A (ohne Hilfsmittel) + Teil B, mit Punkten & Note – jedes Mal neu zusammengestellt</div></div>`;
+  exam.onclick = () => startExam();
+  app.appendChild(exam);
+
+  /* weitere Aktions-Karten */
   const actions = el("div", "grid");
 
-  const mix = el("button", "card action-card");
+  const mix = el("button", "card action-card alt");
   mix.innerHTML =
     `<span class="emoji">🎯</span>
-     <div><div class="card-title">Prüfungsmodus</div>
-     <div class="card-meta" style="color:#eaeaff">20 gemischte Aufgaben aus allen Themen</div></div>`;
+     <div><div class="card-title">Schnelltest</div>
+     <div class="card-meta">20 gemischte Aufgaben aus allen Themen</div></div>`;
   mix.onclick = () => startMix();
   actions.appendChild(mix);
 
@@ -162,13 +173,16 @@ function renderTopicIntro(topicId) {
 /* =====================================================================
    QUIZ
    ===================================================================== */
-function startQuiz(questions, title, topicId) {
+function startQuiz(questions, title, topicId, mode) {
   quiz = {
     list: questions,
     title,
     topicId: topicId || null,
+    mode: mode || "practice",   // "practice" | "exam"
     index: 0,
     correct: 0,
+    earnedPoints: 0,
+    maxPoints: questions.reduce((n, q) => n + (q.points || 1), 0),
     answeredThis: false,
   };
   renderQuestion();
@@ -176,7 +190,17 @@ function startQuiz(questions, title, topicId) {
 function startMix() {
   const all = TOPICS.flatMap(t => t.questions);
   const picked = shuffle(all).slice(0, Math.min(20, all.length));
-  startQuiz(picked, "🎯 Prüfungsmodus", "__mix__");
+  startQuiz(picked, "🎯 Schnelltest", "__mix__");
+}
+
+/* Probeklausur: jedes Mal neu aus der Datenbank zusammengestellt.
+   Teil A (hilfsmittelfrei) zuerst, dann Teil B (mit Taschenrechner). */
+function startExam() {
+  const all = TOPICS.flatMap(t => t.questions);
+  const teilA = shuffle(all.filter(q => q.part === "A")).slice(0, 6);
+  const teilB = shuffle(all.filter(q => q.part === "B")).slice(0, 9);
+  const list = [...teilA, ...teilB];
+  startQuiz(list, "📝 Probeklausur", "__exam__", "exam");
 }
 
 let quiz = null;
@@ -198,9 +222,24 @@ function renderQuestion() {
   bar.appendChild(barFill);
   app.appendChild(bar);
 
+  /* Teil-A/B-Banner nur im Prüfungsmodus */
+  if (quiz.mode === "exam") {
+    const banner = el("div", "part-banner " + (q.part === "A" ? "partA" : "partB"));
+    banner.innerHTML = q.part === "A"
+      ? "📝 <b>Teil A</b> – OHNE Taschenrechner & Formelsammlung rechnen!"
+      : "🧮 <b>Teil B</b> – Taschenrechner & Formelsammlung erlaubt";
+    app.appendChild(banner);
+  }
+
   /* Frage-Karte */
   const card = el("div", "question");
-  card.appendChild(el("div", "qtext", q.q));
+  const qhead = el("div", "qtext");
+  qhead.innerHTML = q.q;
+  if (quiz.mode === "exam") {
+    const pts = q.points || 1;
+    qhead.innerHTML += ` <span class="pts">(${pts} ${pts === 1 ? "Punkt" : "Punkte"})</span>`;
+  }
+  card.appendChild(qhead);
 
   const answerArea = el("div");
 
@@ -282,11 +321,26 @@ function showFeedback(ok, q, given) {
   }
   fb.innerHTML = html;
 
+  /* Stufe 3: noch genauere Erklärung auf Wunsch */
+  if (q.deep) {
+    const deepBtn = el("button", "btn ghost", "🤔 Ich versteh's noch nicht – genauer erklären");
+    deepBtn.style.marginTop = "12px";
+    const deepBox = el("div", "deepbox", `<b>Noch genauer:</b> ${q.deep}`);
+    deepBtn.onclick = () => {
+      deepBox.classList.toggle("show");
+      deepBtn.textContent = deepBox.classList.contains("show")
+        ? "🙈 Erklärung ausblenden"
+        : "🤔 Ich versteh's noch nicht – genauer erklären";
+    };
+    fb.appendChild(deepBtn);
+    fb.appendChild(deepBox);
+  }
+
   if (ok && !solved.has(q.id)) {
     solved.add(q.id);
     saveSolved(solved);
   }
-  if (ok) quiz.correct++;
+  if (ok) { quiz.correct++; quiz.earnedPoints += (q.points || 1); }
   updateScorePill();
 
   quiz.answeredThis = true;
@@ -325,8 +379,51 @@ function goNext() {
 /* =====================================================================
    ERGEBNIS
    ===================================================================== */
+function gradeFor(pct) {
+  for (const g of GRADE_SCALE) if (pct >= g.min) return g.grade;
+  return GRADE_SCALE[GRADE_SCALE.length - 1].grade;
+}
+
 function renderResult() {
   app.innerHTML = "";
+  const card = el("div", "result-card");
+
+  if (quiz.mode === "exam") {
+    /* Probeklausur: Punkte + Note */
+    const pct = Math.round((quiz.earnedPoints / quiz.maxPoints) * 100);
+    const grade = gradeFor(pct);
+    let emoji, msg;
+    if (pct >= 73)      { emoji = "🏆"; msg = "Klasse! Mit so einem Ergebnis kann sich deine Tochter sehen lassen."; }
+    else if (pct >= 59) { emoji = "🎉"; msg = "Gut gemacht – bestanden mit Luft nach oben. Schwächere Themen gezielt nachüben."; }
+    else if (pct >= 45) { emoji = "💪"; msg = "Bestanden! Schau dir die Fehler genau an, dann geht da noch mehr."; }
+    else                { emoji = "📚"; msg = "Noch nicht bestanden – aber genau dafür übt man! Geh die Erklärungen durch und starte eine neue Probeklausur."; }
+
+    card.innerHTML =
+      `<div class="result-emoji">${emoji}</div>
+       <div class="result-score">${quiz.earnedPoints} / ${quiz.maxPoints} Punkte</div>
+       <div class="result-msg">
+         ${pct}% &nbsp;·&nbsp; ungefähre Note: <b>${grade}</b><br>
+         <span style="font-size:13px">(${quiz.correct} von ${quiz.list.length} Aufgaben richtig)</span><br><br>
+         ${msg}<br>
+         <span style="font-size:12px;color:var(--muted)">Hinweis: Der Notenschlüssel ist eine Orientierung – der echte schwankt jährlich leicht.</span>
+       </div>`;
+
+    const row = el("div", "row");
+    row.style.justifyContent = "center";
+    const again = el("button", "btn", "📝 Neue Probeklausur");
+    again.onclick = () => startExam();
+    const home = el("button", "btn secondary", "🏠 Startseite");
+    home.onclick = renderHome;
+    row.appendChild(again);
+    row.appendChild(home);
+    card.appendChild(row);
+
+    app.appendChild(card);
+    window.scrollTo(0, 0);
+    return;
+  }
+
+  /* normaler Übungs-/Schnelltest-Modus */
   const total = quiz.list.length;
   const correct = quiz.correct;
   const pct = Math.round((correct / total) * 100);
@@ -337,7 +434,6 @@ function renderResult() {
   else if (pct >= 50) { emoji = "💪"; msg = "Solide! Schau dir die Fehler nochmal an und übe das Thema gleich nochmal."; }
   else                { emoji = "📚"; msg = "Kein Stress – Übung macht den Meister. Geh die Erklärungen durch und probier's nochmal!"; }
 
-  const card = el("div", "result-card");
   card.innerHTML =
     `<div class="result-emoji">${emoji}</div>
      <div class="result-score">${correct} / ${total}</div>
@@ -346,7 +442,7 @@ function renderResult() {
   const row = el("div", "row");
   row.style.justifyContent = "center";
   const again = el("button", "btn", "🔁 Nochmal üben");
-  again.onclick = () => startQuiz(quiz.list, quiz.title, quiz.topicId);
+  again.onclick = () => startQuiz(quiz.list, quiz.title, quiz.topicId, quiz.mode);
   const home = el("button", "btn secondary", "🏠 Startseite");
   home.onclick = renderHome;
   row.appendChild(again);
@@ -373,7 +469,8 @@ function renderPlan() {
     item.appendChild(el("div", "plan-day", p.day));
     item.appendChild(el("div", null, p.text));
     const go = el("button", "btn secondary go", "Üben →");
-    if (p.topic === "__mix__") go.onclick = () => startMix();
+    if (p.topic === "__exam__") { go.textContent = "Probeklausur →"; go.onclick = () => startExam(); }
+    else if (p.topic === "__mix__") go.onclick = () => startMix();
     else go.onclick = () => renderTopicIntro(p.topic);
     item.appendChild(go);
     app.appendChild(item);

@@ -156,6 +156,24 @@ h2 { font-size: 20px; margin: 0 0 6px; }
 .tipbox.show { display: block; }
 .tipbox b { color: var(--accent); }
 
+.deepbox {
+  margin-top: 12px; background: #102a1c; border: 1px solid var(--good);
+  border-radius: 12px; padding: 13px 15px; color: var(--text); font-size: 15px;
+  line-height: 1.55; display: none;
+}
+.deepbox.show { display: block; }
+.deepbox b { color: var(--good); }
+
+/* Teil-A/B-Banner in der Probeklausur */
+.part-banner {
+  border-radius: 12px; padding: 10px 14px; margin: 0 0 14px; font-size: 14px;
+  border: 1px solid var(--line);
+}
+.part-banner.partA { background: #3a2417; border-color: #b9742f; }
+.part-banner.partB { background: #16294a; border-color: var(--accent); }
+
+.qtext .pts { color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+
 .steps { margin: 10px 0 0; padding-left: 22px; }
 .steps li { margin: 7px 0; line-height: 1.5; }
 
