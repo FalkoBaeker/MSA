@@ -119,28 +119,27 @@ def _textbox_xml(line: Line, dpi: int, sz_halfpt: int, shape_id: int,
 
 
 def _font_halfpts(lines: list[Line], dpi: int, body_pt: float) -> list[int]:
-    """Schriftgröße (in Halbpunkten) je Zeile.
+    """Schriftgröße (in Halbpunkten) je Zeile – einheitlich wie im Original.
 
-    Basis ist die *normalisierte* Größe (ruhiges, einheitliches Schriftbild).
-    Nur wenn eine Zeile sonst in die nächste hineinragen würde, wird sie sanft
-    verkleinert – aber nie unter eine lesbare Mindestgröße. So vermeiden wir
-    sowohl Überlappungen als auch winzig gequetschte Zeilen.
+    Das Original verwendet praktisch *eine* Textgröße; Überschriften sind nur
+    fett, nicht größer. Wir setzen daher fast alle Zeilen auf die dominante
+    Größe und vergrößern nur deutlich größere Titel moderat. Überlappungen
+    werden später durch leichtes Verschieben (Entzerrung) gelöst, nicht durch
+    Schrumpfen – so bleibt das Schriftbild ruhig.
     """
-    order = sorted(range(len(lines)), key=lambda i: (lines[i].top, lines[i].left))
-    floor_px = body_pt * dpi / 72.0 * 0.8       # Mindestgröße
-    sizes = [0] * len(lines)
-    for rank, idx in enumerate(order):
-        ln = lines[idx]
-        base_px = ln.font_pt * dpi / 72.0       # normalisierte Größe in px
-        if rank + 1 < len(order):
-            gap = lines[order[rank + 1]].top - ln.top
-            limit_px = gap * 0.95
+    # Tesseract misst die Wort-Höhe enger als die Schriftgröße -> hochskalieren.
+    # Eine *einheitliche* Größe (wie im Original) ist robuster als pro-Zeile
+    # gemessene Größen, die bei Ober-/Unterlängen leicht ausreißen.
+    body_eff = body_pt * 1.2
+    body_px = body_eff * dpi / 72.0
+    big_px = body_px * 1.7                       # nur klar größere Titel
+    sizes: list[int] = []
+    for ln in lines:
+        if ln.raw_h > big_px:
+            pt = min(px_to_pt(ln.raw_h, dpi) * 1.15, body_eff * 1.6)
         else:
-            limit_px = base_px
-        size_px = min(base_px, limit_px)
-        size_px = max(size_px, floor_px)
-        pt = px_to_pt(size_px, dpi)
-        sizes[idx] = max(7, int(round(pt * 2)))
+            pt = body_eff
+        sizes.append(max(8, int(round(pt * 2))))
     return sizes
 
 

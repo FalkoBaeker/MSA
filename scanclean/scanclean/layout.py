@@ -89,39 +89,48 @@ def group_lines(words: list[Word], gray: np.ndarray, dpi: int,
     densities = {id(w): _ink_density(gray, w) for w in words}
     vals = sorted(densities.values())
     median_density = vals[len(vals) // 2] if vals else 0.0
-    bold_threshold = median_density * 1.35
+    bold_threshold = median_density * 1.22
 
     buckets: dict[tuple[int, int, int], list[Word]] = {}
     for w in words:
         buckets.setdefault(w.line_id, []).append(w)
 
+    # große waagerechte Lücke innerhalb einer Zeile -> eigenständige Segmente
+    # (trennt z. B. eine linksbündige Überschrift vom rechtsbündigen Datum)
+    gap_split = page_width * 0.16
+
     lines: list[Line] = []
     for ws in buckets.values():
         ws.sort(key=lambda w: w.left)
-        left = min(w.left for w in ws)
-        top = min(w.top for w in ws)
-        right = max(w.left + w.width for w in ws)
-        bottom = max(w.top + w.height for w in ws)
-        heights = sorted(w.height for w in ws)
-        median_h = heights[len(heights) // 2]
-        # vorläufige Größe; die echte wird in _normalize_lines gesetzt
-        font_pt = round(px_to_pt(median_h, dpi) * 0.95, 1)
+        segments: list[list[Word]] = [[ws[0]]]
+        for prev, cur in zip(ws, ws[1:]):
+            if cur.left - (prev.left + prev.width) > gap_split:
+                segments.append([cur])
+            else:
+                segments[-1].append(cur)
 
-        bold_votes = sum(densities[id(w)] > bold_threshold for w in ws)
-        bold = bold_votes >= max(1, (len(ws) + 1) // 2)
+        for seg in segments:
+            left = min(w.left for w in seg)
+            top = min(w.top for w in seg)
+            right = max(w.left + w.width for w in seg)
+            bottom = max(w.top + w.height for w in seg)
+            heights = sorted(w.height for w in seg)
+            median_h = heights[len(heights) // 2]
+            # vorläufige Größe; die echte wird in _normalize_lines gesetzt
+            font_pt = round(px_to_pt(median_h, dpi) * 0.95, 1)
 
-        # Ausrichtung grob aus Position ableiten
-        center = (left + right) / 2
-        align = "left"
-        if left > page_width * 0.55:
-            align = "right"
-        elif abs(center - page_width / 2) < page_width * 0.06 and left > page_width * 0.25:
-            align = "center"
+            bold_votes = sum(densities[id(w)] > bold_threshold for w in seg)
+            bold = bold_votes >= max(1, (len(seg) + 1) // 2)
 
-        lines.append(Line(
-            words=ws, left=left, top=top, right=right, bottom=bottom,
-            font_pt=font_pt, bold=bold, align=align, raw_h=float(median_h),
-        ))
+            # Ausrichtung grob aus Position ableiten
+            align = "left"
+            if left > page_width * 0.55:
+                align = "right"
+
+            lines.append(Line(
+                words=seg, left=left, top=top, right=right, bottom=bottom,
+                font_pt=font_pt, bold=bold, align=align, raw_h=float(median_h),
+            ))
     lines.sort(key=lambda ln: (ln.top, ln.left))
     return lines
 
