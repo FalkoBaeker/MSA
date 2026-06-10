@@ -25,6 +25,8 @@ class Line:
     font_pt: float
     bold: bool
     align: str  # "left" | "right" | "center"
+    raw_h: float = 0.0      # gemessene Zeichenhöhe (px) vor Normalisierung
+    indent_level: int = 0   # Einrückungsstufe (0 = linker Rand)
 
     @property
     def text(self) -> str:
@@ -54,9 +56,12 @@ class PageModel:
     width: int
     height: int
     dpi: int
+    body_pt: float = 11.0          # dominante Textgröße der Seite
+    indent_step_px: int = 1         # Pixel pro Einrückungsstufe
     lines: list[Line] = field(default_factory=list)
     hlines: list[HLine] = field(default_factory=list)
     graphics: list[Graphic] = field(default_factory=list)
+    tables: list[Graphic] = field(default_factory=list)  # als Bild übernommen
 
 
 def px_to_pt(px: float, dpi: int) -> float:
@@ -99,6 +104,7 @@ def group_lines(words: list[Word], gray: np.ndarray, dpi: int,
         bottom = max(w.top + w.height for w in ws)
         heights = sorted(w.height for w in ws)
         median_h = heights[len(heights) // 2]
+        # vorläufige Größe; die echte wird in _normalize_lines gesetzt
         font_pt = round(px_to_pt(median_h, dpi) * 0.95, 1)
 
         bold_votes = sum(densities[id(w)] > bold_threshold for w in ws)
@@ -114,10 +120,53 @@ def group_lines(words: list[Word], gray: np.ndarray, dpi: int,
 
         lines.append(Line(
             words=ws, left=left, top=top, right=right, bottom=bottom,
-            font_pt=font_pt, bold=bold, align=align,
+            font_pt=font_pt, bold=bold, align=align, raw_h=float(median_h),
         ))
     lines.sort(key=lambda ln: (ln.top, ln.left))
     return lines
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    idx = min(len(s) - 1, max(0, int(q * (len(s) - 1))))
+    return s[idx]
+
+
+def normalize_lines(lines: list[Line], dpi: int) -> tuple[float, int]:
+    """Schnappt Schriftgrößen auf wenige Stufen und Einrückungen auf ein Raster.
+
+    Scans haben eigentlich eine einheitliche Textgröße und einen festen linken
+    Rand; die OCR-Messungen schwanken aber leicht. Wir bestimmen die *dominante*
+    Textgröße/Randposition und richten alle Zeilen daran aus – das ergibt ein
+    ruhiges, originalgetreues Schriftbild statt zappelnder Größen.
+
+    Liefert (body_pt, indent_step_px) zurück.
+    """
+    if not lines:
+        return 11.0, max(1, int(dpi * 0.18))
+
+    # dominante Zeichenhöhe (nach Wortanzahl gewichtet) = Fließtext
+    weighted = [ln.raw_h for ln in lines for _ in ln.words]
+    body_h = _percentile(weighted, 0.5) or lines[0].raw_h
+    body_pt = round(px_to_pt(body_h, dpi) * 0.95, 1)
+
+    # linker Rand robust aus dem unteren Bereich der Startpositionen
+    margin = _percentile([float(ln.left) for ln in lines], 0.1)
+    indent_step = max(1, int(dpi * 0.18))  # ~0,45 cm pro Stufe
+
+    for ln in lines:
+        ratio = ln.raw_h / body_h if body_h else 1.0
+        if ratio < 1.25:
+            ln.font_pt = body_pt
+        elif ratio < 1.7:
+            ln.font_pt = round(body_pt * 1.3, 1)
+        else:
+            ln.font_pt = round(body_pt * 1.7, 1)
+        ln.indent_level = max(0, min(8, round((ln.left - margin) / indent_step)))
+
+    return body_pt, indent_step
 
 
 def detect_hlines(gray: np.ndarray, dpi: int) -> list[HLine]:
@@ -135,6 +184,44 @@ def detect_hlines(gray: np.ndarray, dpi: int) -> list[HLine]:
         if w >= min_len and h <= max(4, dpi // 60):
             result.append(HLine(x, y + h // 2, x + w, y + h // 2))
     result.sort(key=lambda l: l.y1)
+    return result
+
+
+def detect_tables(gray: np.ndarray, dpi: int) -> list[Graphic]:
+    """Findet Tabellenbereiche über sich kreuzende Gitterlinien.
+
+    Wir erkennen lange waagerechte und senkrechte Linien getrennt, überlagern
+    sie und betrachten zusammenhängende Gitterflächen als Tabelle. Diese werden
+    später als Bild übernommen (auf Wunsch nicht als Text rekonstruiert).
+    """
+    binr = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 15, 10)
+    h_len = max(20, dpi // 6)
+    v_len = max(15, dpi // 8)
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (h_len, 1))
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, v_len))
+    horiz = cv2.morphologyEx(binr, cv2.MORPH_OPEN, h_kernel)
+    vert = cv2.morphologyEx(binr, cv2.MORPH_OPEN, v_kernel)
+    grid = cv2.bitwise_or(horiz, vert)
+    # Lücken schließen, damit eine Tabelle zu einer Fläche verschmilzt
+    grid = cv2.dilate(grid, cv2.getStructuringElement(
+        cv2.MORPH_RECT, (dpi // 12, dpi // 12)))
+    contours, _ = cv2.findContours(grid, cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+    result: list[Graphic] = []
+    for c in contours:
+        x, y, bw, bh = cv2.boundingRect(c)
+        if bw < dpi * 1.5 or bh < dpi * 0.5:
+            continue
+        # echte Tabelle braucht waagerechte UND senkrechte Linien im Bereich
+        roi_h = horiz[y:y + bh, x:x + bw]
+        roi_v = vert[y:y + bh, x:x + bw]
+        if cv2.countNonZero(roi_h) < bw or cv2.countNonZero(roi_v) < bh:
+            continue
+        pad = dpi // 30
+        result.append(Graphic(max(0, x - pad), max(0, y - pad),
+                              min(gray.shape[1], x + bw + pad),
+                              min(gray.shape[0], y + bh + pad)))
     return result
 
 
@@ -181,12 +268,14 @@ def build_page_model(words: list[Word], gray: np.ndarray, dpi: int,
     # haben in der Regel keinen Briefkopf, und der Detektor würde dort
     # fälschlich Fließtext als Bild übernehmen.
     model.graphics = detect_graphics(gray, words, dpi) if first_page else []
-    # Wörter, die im Logo-Bereich liegen, nicht als Text übernehmen
+    model.tables = detect_tables(gray, dpi)
+    # Wörter, die im Logo- oder Tabellenbereich liegen, nicht als Text übernehmen
+    regions = model.graphics + model.tables
     graphic_words = set()
     for i, word in enumerate(words):
         cx = word.left + word.width / 2
         cy = word.top + word.height / 2
-        for g in model.graphics:
+        for g in regions:
             if g.left <= cx <= g.right and g.top <= cy <= g.bottom:
                 graphic_words.add(i)
     text_words = [w for i, w in enumerate(words) if i not in graphic_words]
@@ -203,6 +292,7 @@ def build_page_model(words: list[Word], gray: np.ndarray, dpi: int,
             if not (ln.font_pt > median_font * 2.2 and len(ln.words) <= 3)
         ]
 
+    model.body_pt, model.indent_step_px = normalize_lines(lines, dpi)
     model.lines = lines
     model.hlines = detect_hlines(gray, dpi)
     return model
