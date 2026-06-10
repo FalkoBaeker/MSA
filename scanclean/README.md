@@ -36,14 +36,27 @@ Python-Pakete:
 pip install -r requirements.txt
 ```
 
+## Zwei Ausgaben (Standard)
+
+Pro Eingabe-PDF entstehen standardmäßig **zwei** Dateien – nimm je nach Zweck
+die passende:
+
+- **`name.pdf`** – durchsuchbare PDF: entfotografiertes Originalbild + unsichtbare
+  Textebene. **Sieht praktisch identisch** zum Original aus (inkl. echter
+  Schrift/Fett), Text ist **markier-/kopier-/durchsuchbar**, aber nicht frei
+  umtippbar.
+- **`name.docx`** – editierbare Rekonstruktion (Overlay): Text frei bearbeitbar
+  an Originalposition. **Sehr nah, aber nicht pixelidentisch** (OCR-Neusatz).
+
 ## Benutzung
 
 ```bash
-# Eine Datei -> befund.docx daneben
+# Eine Datei -> befund.pdf (durchsuchbar) + befund.docx (editierbar)
 python -m scanclean befund.pdf
 
-# Ziel selbst wählen + zusätzlich gereinigtes "Scan"-PDF
-python -m scanclean befund.pdf -o ergebnis.docx --clean-pdf
+# Nur eines von beiden
+python -m scanclean befund.pdf --pdf-only
+python -m scanclean befund.pdf --docx-only
 
 # Mehrere Dateien in einen Zielordner
 python -m scanclean *.pdf --outdir konvertiert/
@@ -53,9 +66,11 @@ Optionen:
 
 | Option | Bedeutung |
 |---|---|
-| `-o, --output` | Ziel-DOCX (nur bei einer Eingabedatei) |
+| `-o, --output` | Basisname/-pfad der Ausgaben (eine Eingabedatei) |
 | `--outdir` | Zielordner bei mehreren Dateien |
-| `--clean-pdf` | zusätzlich ein gereinigtes, nicht editierbares Scan-PDF |
+| `--docx-only` / `--pdf-only` | nur eine der beiden Ausgaben |
+| `--clean-pdf` | zusätzlich ein reines Bild-PDF ohne Textebene |
+| `--flow` | DOCX als Fließtext statt Overlay |
 | `--dpi` | Render-Auflösung (Standard 300) |
 | `--lang` | OCR-Sprache(n), z. B. `deu`, `deu+eng` |
 
@@ -79,7 +94,7 @@ scanclean/
   layout.py       Zeilen/Größen/Fettung, Logo- & Tabellen-Erkennung, Normalisierung
   overlay.py      Standard-Modus: Hintergrundbild + absolut positionierte Textfelder
   reconstruct.py  Flow-Modus: klassisches Fließtext-DOCX
-  pipeline.py     Gesamtablauf PDF -> DOCX (+ optional Scan-PDF)
+  pipeline.py     Gesamtablauf PDF -> durchsuchbare PDF + editierbares DOCX
   cli.py          Kommandozeile
   preview.py      Vorschau-Renderer zur Qualitätskontrolle
 ```

@@ -89,6 +89,20 @@ def deskew(gray: np.ndarray, angle: float) -> np.ndarray:
     )
 
 
+def remove_watermark(gray: np.ndarray) -> np.ndarray:
+    """Übermalt das 'Scanned with CamScanner'-Wasserzeichen unten rechts.
+
+    Es sitzt zuverlässig in der unteren rechten Ecke; wir weißen einen
+    konservativen Eckbereich, um echten Inhalt nicht zu treffen.
+    """
+    h, w = gray.shape[:2]
+    y0 = int(h * 0.94)
+    x0 = int(w * 0.78)
+    out = gray.copy()
+    out[y0:h, x0:w] = 255
+    return out
+
+
 def clean_page(image: np.ndarray, dpi: int = 300) -> np.ndarray:
     """Komplette Reinigungs-Pipeline. Gibt sauberes Graustufenbild zurück."""
     gray = to_gray(image)
@@ -97,4 +111,5 @@ def clean_page(image: np.ndarray, dpi: int = 300) -> np.ndarray:
     sharp = sharpen(boosted)
     angle = estimate_skew(sharp)
     result = deskew(sharp, angle)
+    result = remove_watermark(result)
     return result
