@@ -9,9 +9,18 @@ Es passieren zwei Dinge:
    Hintergrund wird gleichmäßig weiß, der Text scharf, Schräglage korrigiert.
    Das Ergebnis sieht aus wie ein echter Scan statt wie ein Foto.
 2. **Rekonstruktion ins DOCX** – deutsche Texterkennung (Tesseract) macht den
-   Inhalt zu **echtem, editierbarem Text** an originalgetreuer Position
-   (Schriftgrößen, Fettung, Einrückung). Logos/Briefköpfe werden als Bild
-   übernommen, Tabellen als sauberes Bild eingefügt.
+   Inhalt zu **echtem, editierbarem Text**.
+
+### Zwei Modi
+
+- **`overlay` (Standard, maximale Treue):** Hintergrund ist eine weiße Seite mit
+  nur den bewahrten Grafiken (Logo/Briefkopf, Tabellen als Bild, Trennlinien) –
+  der Originaltext (und das CamScanner-Wasserzeichen) ist entfernt. Darüber liegt
+  der erkannte Text als **absolut positionierte, editierbare Textfelder** an den
+  Originalkoordinaten. Ergebnis: sieht praktisch aus wie das Original, ist aber
+  bearbeitbar.
+- **`flow` (`--flow`):** klassischer Fließtext von oben nach unten. Einfacher zu
+  bearbeiten, aber das Layout sitzt nicht 1:1.
 
 ## Installation
 
@@ -68,7 +77,8 @@ scanclean/
   clean.py        Reinigung: Schatten weg, weiß, scharf, gerade (OpenCV)
   ocr.py          deutsche Texterkennung mit Position/Stil (Tesseract)
   layout.py       Zeilen/Größen/Fettung, Logo- & Tabellen-Erkennung, Normalisierung
-  reconstruct.py  editierbares DOCX bauen (Text, Logo, Tabellen-Bilder)
+  overlay.py      Standard-Modus: Hintergrundbild + absolut positionierte Textfelder
+  reconstruct.py  Flow-Modus: klassisches Fließtext-DOCX
   pipeline.py     Gesamtablauf PDF -> DOCX (+ optional Scan-PDF)
   cli.py          Kommandozeile
   preview.py      Vorschau-Renderer zur Qualitätskontrolle

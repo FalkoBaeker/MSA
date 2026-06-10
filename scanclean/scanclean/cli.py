@@ -33,7 +33,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Render-Auflösung (Standard 300)")
     parser.add_argument("--lang", default="deu",
                         help="OCR-Sprache(n) für Tesseract (Standard deu)")
+    parser.add_argument("--flow", action="store_true",
+                        help="Fließtext statt originalgetreuem Overlay "
+                             "(einfacher, aber nicht 1:1)")
     args = parser.parse_args(argv)
+    style = "flow" if args.flow else "overlay"
 
     if args.output and len(args.pdf) > 1:
         parser.error("-o/--output ist nur bei einer einzelnen Eingabedatei erlaubt.")
@@ -55,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Verarbeite: {src.name}")
         convert(str(src), str(docx_path),
                 str(clean_pdf_path) if clean_pdf_path else None,
-                dpi=args.dpi, lang=args.lang, progress=_progress)
+                dpi=args.dpi, lang=args.lang, style=style, progress=_progress)
         print(f"  -> {docx_path}"
               + (f"  +  {clean_pdf_path}" if clean_pdf_path else ""))
     return 0

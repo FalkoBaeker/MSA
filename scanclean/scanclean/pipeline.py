@@ -16,6 +16,7 @@ from .clean import clean_page
 from .ocr import run_ocr
 from .layout import build_page_model, PageModel
 from .reconstruct import build_document
+from .overlay import build_overlay_document
 
 
 @dataclass
@@ -40,8 +41,18 @@ def process_pdf(pdf_path: str, dpi: int = 300, lang: str = "deu",
     return results
 
 
-def to_docx(results: list[PageResult], out_path: str) -> None:
-    build_document([(r.model, r.cleaned) for r in results], out_path)
+def to_docx(results: list[PageResult], out_path: str,
+            style: str = "overlay") -> None:
+    """Schreibt das DOCX.
+
+    style="overlay": Hintergrundbild + editierbare Textebene (originalgetreu).
+    style="flow":    klassischer Fließtext (einfacher, aber nicht 1:1).
+    """
+    pages = [(r.model, r.cleaned) for r in results]
+    if style == "flow":
+        build_document(pages, out_path)
+    else:
+        build_overlay_document(pages, out_path)
 
 
 def to_clean_pdf(results: list[PageResult], out_path: str) -> None:
@@ -56,8 +67,9 @@ def to_clean_pdf(results: list[PageResult], out_path: str) -> None:
 
 
 def convert(pdf_path: str, docx_path: str, clean_pdf_path: str | None = None,
-            dpi: int = 300, lang: str = "deu", progress=None) -> None:
+            dpi: int = 300, lang: str = "deu", style: str = "overlay",
+            progress=None) -> None:
     results = process_pdf(pdf_path, dpi=dpi, lang=lang, progress=progress)
-    to_docx(results, docx_path)
+    to_docx(results, docx_path, style=style)
     if clean_pdf_path:
         to_clean_pdf(results, clean_pdf_path)
